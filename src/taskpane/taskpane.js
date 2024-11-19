@@ -67,7 +67,7 @@ Office.onReady((info) => {
         isLoggedIn = false;
         authToken = null;
         localStorage.removeItem("authToken");
-        loginButton.textContent = "Login";
+        loginButton.textContent = "Login To Deal Driver";
         dealOptions.style.display = "none";
       }
     });
@@ -525,12 +525,38 @@ async function handleLogin(userName, password) {
 
     if (response.ok) {
       const data = await response.json();
-      console.log("This is the api response data", data);
+      console.log("This is the API response data", data);
+
+      // Save token to localStorage
       localStorage.setItem("authToken", data.token);
-      authToken = data.token;
+
+      // Extract deal names from the response
+      const dealNames = data.userDetails?.deal_name || [];
+
+      // Populate the dropdown
+      const dealSelect = document.getElementById("dealSelect");
+      dealSelect.innerHTML = ""; // Clear existing options
+
+      dealNames.forEach((deal) => {
+        const option = document.createElement("option");
+        option.value = deal._id; // Use the deal ID as the value
+        console.log("These are the option value ", option.value);
+        option.textContent = deal.deal_name; // Display the deal name
+        dealSelect.appendChild(option);
+      });
+
+      // Show the deal options section if deals exist
+      if (dealNames.length > 0) {
+        document.getElementById("dealOptions").style.display = "block";
+      } else {
+        document.getElementById("dealOptions").style.display = "none";
+      }
+
       return true;
+    } else {
+      console.error("Login failed with status:", response.status);
+      return false;
     }
-    return false;
   } catch (error) {
     console.error("Login error:", error);
     return false;
@@ -567,5 +593,51 @@ async function handleLogin(userName, password) {
 //     alert(`Deal "${selectedDeal}" sent successfully!`);
 //   } else {
 //     alert("Please select a deal before sending.");
+//   }
+// });
+
+// document.addEventListener("DOMContentLoaded", () => {
+//   const verifyTokenButton = document.getElementById("verifyTokenButton");
+
+//   // Ensure the event listener is attached only once
+//   if (!verifyTokenButton.hasListener) {
+//     verifyTokenButton.addEventListener("click", async (event) => {
+//       // Prevent default form submission if the button is inside a form
+//       event.preventDefault();
+
+//       const tokenInput = document.getElementById("tokenInput").value.trim();
+
+//       if (!tokenInput) {
+//         alert("Please enter a token to verify.");
+//         return;
+//       }
+
+//       try {
+//         const response = await fetch("https://deal-driver-20245869.drapcode.io/authorize-secret-code", {
+//           method: "POST",
+//           headers: {
+//             "Content-Type": "application/json",
+//           },
+//           body: JSON.stringify({
+//             verify_code: tokenInput,
+//           }),
+//         });
+
+//         if (!response.ok) {
+//           const errorData = await response.json();
+//           alert(`Verification failed: ${errorData.message || "Unknown error"}`);
+//           return;
+//         }
+
+//         const result = await response.json();
+//         alert(`Token verified successfully: ${result.message || "Success!"}`);
+//       } catch (error) {
+//         console.error("Error verifying token:", error);
+//         alert("An error occurred while verifying the token. Please try again.");
+//       }
+//     });
+
+//     // Mark that the listener has been added
+//     verifyTokenButton.hasListener = true;
 //   }
 // });
