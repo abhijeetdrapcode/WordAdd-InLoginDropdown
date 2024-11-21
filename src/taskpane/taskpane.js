@@ -52,12 +52,6 @@ Office.onReady((info) => {
     const closeModal = document.querySelector(".close-modal");
     const loginError = document.getElementById("loginError");
 
-    // Check initial login status
-    if (authToken) {
-      isLoggedIn = true;
-      loginButton.textContent = "Logout";
-    }
-
     // Login button click handler
     loginButton.addEventListener("click", () => {
       if (!isLoggedIn) {
@@ -510,9 +504,12 @@ async function clearCurrentContent() {
 }
 
 //Login
+// Global variable to store login response
+let loginResponseData = null;
+
 async function handleLogin(userName, password) {
   try {
-    const response = await fetch("https://deal-driver-20245869.drapcode.io/login", {
+    const response = await fetch("https://deal-driver-20245869.api.drapcode.io/api/v1/developer/login", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -526,6 +523,13 @@ async function handleLogin(userName, password) {
     if (response.ok) {
       const data = await response.json();
       console.log("This is the API response data", data);
+
+      // Save to localStorage
+      localStorage.setItem("loginResponseData", JSON.stringify(data));
+
+      // Set global variable
+      loginResponseData = data;
+      console.log("This is the login response variable: ", loginResponseData);
 
       // Save token to localStorage
       localStorage.setItem("authToken", data.token);
@@ -563,81 +567,95 @@ async function handleLogin(userName, password) {
   }
 }
 
-//Api call for login
-// async function ApiCall() {
-//   if (!authToken) {
-//     console.error("User not authenticated");
-//     return;
-//   }
+sendDealButton.addEventListener("click", async () => {
+  // Create or select the message element
+  let messageElement = document.getElementById("dealSendMessage");
+  if (!messageElement) {
+    messageElement = document.createElement("div");
+    messageElement.id = "dealSendMessage";
+    messageElement.style.position = "absolute";
+    messageElement.style.top = "-50px"; // Position above the button
+    messageElement.style.left = "0";
+    messageElement.style.width = "100%";
+    messageElement.style.padding = "10px";
+    messageElement.style.textAlign = "center";
+    messageElement.style.transition = "top 0.3s ease";
+    sendDealButton.parentNode.insertBefore(messageElement, sendDealButton);
+  }
 
-//   try {
-//     const response = await fetch("YOUR_API_ENDPOINT", {
-//       headers: {
-//         Authorization: `Bearer ${authToken}`,
-//         "Content-Type": "application/json",
-//       },
-//       // ... rest of your fetch configuration
-//     });
-//     // ... rest of your API call logic
-//   } catch (error) {
-//     console.error("API call error:", error);
-//   }
-// }
+  // Function to show message
+  const showMessage = (message, isError = false) => {
+    messageElement.textContent = message;
+    messageElement.style.backgroundColor = isError ? "#ffdddd" : "#ddffdd";
+    messageElement.style.color = isError ? "red" : "green";
+    messageElement.style.top = "0";
 
-// Select Deal
-// sendDealButton.addEventListener("click", () => {
-//   const selectedDeal = dealSelect.value;
-//   alert("Data is being sent");
-//   if (selectedDeal) {
-//     console.log(`Sending data for: ${selectedDeal}`);
-//     alert(`Deal "${selectedDeal}" sent successfully!`);
-//   } else {
-//     alert("Please select a deal before sending.");
-//   }
-// });
+    // Hide message after 9 seconds
+    setTimeout(() => {
+      messageElement.style.top = "-50px";
+    }, 9000);
+  };
 
-// document.addEventListener("DOMContentLoaded", () => {
-//   const verifyTokenButton = document.getElementById("verifyTokenButton");
+  // Disable the send button and add visual feedback
+  sendDealButton.disabled = true;
+  sendDealButton.style.opacity = "0.5";
+  sendDealButton.style.cursor = "not-allowed";
 
-//   // Ensure the event listener is attached only once
-//   if (!verifyTokenButton.hasListener) {
-//     verifyTokenButton.addEventListener("click", async (event) => {
-//       // Prevent default form submission if the button is inside a form
-//       event.preventDefault();
+  try {
+    const selectedDealName = dealSelect.options[dealSelect.selectedIndex].text;
+    const selectedCategory = document.getElementById("categorySelect").value;
+    const loginResponseDataString = localStorage.getItem("loginResponseData");
 
-//       const tokenInput = document.getElementById("tokenInput").value.trim();
+    if (!loginResponseDataString) {
+      showMessage("Login data not found", true);
+      return;
+    }
 
-//       if (!tokenInput) {
-//         alert("Please enter a token to verify.");
-//         return;
-//       }
+    const loginResponseData = JSON.parse(loginResponseDataString);
+    const dealsArray = loginResponseData.userDetails.deal_name || [];
+    const matchedDeal = dealsArray.find((deal) => deal.deal_name === selectedDealName);
 
-//       try {
-//         const response = await fetch("https://deal-driver-20245869.drapcode.io/authorize-secret-code", {
-//           method: "POST",
-//           headers: {
-//             "Content-Type": "application/json",
-//           },
-//           body: JSON.stringify({
-//             verify_code: tokenInput,
-//           }),
-//         });
+    if (!matchedDeal) {
+      showMessage("Could not find matching deal", true);
+      return;
+    }
 
-//         if (!response.ok) {
-//           const errorData = await response.json();
-//           alert(`Verification failed: ${errorData.message || "Unknown error"}`);
-//           return;
-//         }
+    const dealUuid = matchedDeal.uuid;
+    const tenantId = loginResponseData.tenant.uuid;
 
-//         const result = await response.json();
-//         alert(`Token verified successfully: ${result.message || "Success!"}`);
-//       } catch (error) {
-//         console.error("Error verifying token:", error);
-//         alert("An error occurred while verifying the token. Please try again.");
-//       }
-//     });
+    const formattedCategoryData = categoryData[selectedCategory].reduce((acc, item) => {
+      acc[item.key] = item.value;
+      return acc;
+    }, {});
 
-//     // Mark that the listener has been added
-//     verifyTokenButton.hasListener = true;
-//   }
-// });
+    const response = await fetch("http://localhost:3002/parseWord", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        dealId: dealUuid,
+        tenantId: tenantId,
+      },
+      body: JSON.stringify(formattedCategoryData),
+    });
+
+    if (response.ok) {
+      const responseData = await response.json();
+      // showMessage(`Deal "${selectedDealName}" - ${selectedCategory} sent successfully!`);
+      showMessage(`${selectedCategory} data sent successfully to ${selectedDealName}`);
+      console.log("Server response:", responseData);
+    } else {
+      const errorData = await response.text();
+      showMessage("Error while sending the data", true);
+      console.error(`Failed to send deal. Status: ${response.status}`);
+      console.error("Error details:", errorData);
+    }
+  } catch (error) {
+    showMessage("Error sending deal", true);
+    console.error("Error sending deal:", error);
+  } finally {
+    // Re-enable the send button
+    sendDealButton.disabled = false;
+    sendDealButton.style.opacity = "1";
+    sendDealButton.style.cursor = "pointer";
+  }
+});
