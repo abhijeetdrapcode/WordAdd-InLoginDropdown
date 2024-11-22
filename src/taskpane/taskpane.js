@@ -1,3 +1,6 @@
+/* eslint-disable office-addins/load-object-before-read */
+/* eslint-disable office-addins/call-sync-before-read */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 let categoryData = {
   closing: [],
   postClosing: [],
@@ -8,14 +11,14 @@ let isDataLoaded = false;
 
 //login variable
 let isLoggedIn = false;
-let authToken = localStorage.getItem("authToken");
+// let authToken = "";
 //login variable
 
 const dealSelect = document.getElementById("dealSelect");
 const sendDealButton = document.getElementById("sendDealButton");
 
 let documentContentHash = "";
-let documentParagraphsState = [];
+// let documentParagraphsState = [];
 Office.onReady((info) => {
   if (info.host === Office.HostType.Word) {
     const logStyleContentButton = document.getElementById("logStyleContentButton");
@@ -303,6 +306,108 @@ async function loadAllParagraphsData() {
   }
 }
 
+// async function getListInfoFromSelection() {
+//   if (!isDataLoaded) {
+//     console.log("Data is still loading. Please wait.");
+//     return;
+//   }
+
+//   const selectedCategory = document.getElementById("categorySelect").value;
+//   if (!selectedCategory) {
+//     console.log("No category selected");
+//     return;
+//   }
+
+//   try {
+//     await Word.run(async (context) => {
+//       const selection = context.document.getSelection();
+//       const range = selection.getRange();
+//       range.load("text");
+//       await context.sync();
+
+//       // const selectedRange = range.text;
+//       const paragraphs = selection.paragraphs;
+//       paragraphs.load("items");
+//       await context.sync();
+
+//       let newSelections = [];
+
+//       for (let i = 0; i < paragraphs.items.length; i++) {
+//         const selectedParagraph = paragraphs.items[i];
+//         selectedParagraph.load("text,isListItem");
+//         await context.sync();
+
+//         if (selectedParagraph.isListItem) {
+//           selectedParagraph.listItem.load("level,listString");
+//           await context.sync();
+//         }
+
+//         const selectedText = selectedParagraph.text.trim().replace(/^\.\s*/, "");
+//         const normalizedSelectedText = normalizeText(selectedText);
+
+//         const matchingParagraphs = allParagraphsData.filter(
+//           (para) => para.value === normalizedSelectedText || para.originalText === selectedText
+//         );
+
+//         if (matchingParagraphs.length > 0) {
+//           let bestMatch = matchingParagraphs[0];
+
+//           if (matchingParagraphs.length > 1 && selectedParagraph.isListItem) {
+//             const selectedLevel = selectedParagraph.listItem.level;
+//             const selectedListString = selectedParagraph.listItem.listString;
+
+//             const exactMatch = matchingParagraphs.find(
+//               (para) => para.isListItem && para.level === selectedLevel && para.listString === selectedListString
+//             );
+
+//             if (exactMatch) {
+//               bestMatch = exactMatch;
+//             }
+//           }
+
+//           const isDuplicate = categoryData[selectedCategory].some(
+//             (item) => item.key === bestMatch.key && item.value === bestMatch.value
+//           );
+
+//           if (!isDuplicate) {
+//             newSelections.push({
+//               key: bestMatch.key,
+//               value: bestMatch.value,
+//             });
+//           }
+//         }
+//       }
+
+//       if (newSelections.length > 0) {
+//         categoryData[selectedCategory] = [...categoryData[selectedCategory], ...newSelections];
+
+//         categoryData[selectedCategory].sort((a, b) => {
+//           const aNumbers = a.key.split(".").map((num) => parseInt(num));
+//           const bNumbers = b.key.split(".").map((num) => parseInt(num));
+
+//           for (let i = 0; i < Math.max(aNumbers.length, bNumbers.length); i++) {
+//             if (isNaN(aNumbers[i])) return 1;
+//             if (isNaN(bNumbers[i])) return -1;
+//             if (aNumbers[i] !== bNumbers[i]) return aNumbers[i] - bNumbers[i];
+//           }
+//           return 0;
+//         });
+
+//         updateCategoryDisplay(selectedCategory);
+//         const clipboardString = formatCategoryData(selectedCategory);
+//         await copyToClipboard(clipboardString);
+
+//         console.log(`Updated ${selectedCategory} data:`, categoryData[selectedCategory]);
+//       }
+//     });
+//   } catch (error) {
+//     console.error("An error occurred while processing selection:", error);
+//     if (error instanceof OfficeExtension.Error) {
+//       console.error("Debug info:", error.debugInfo);
+//     }
+//   }
+// }
+
 async function getListInfoFromSelection() {
   if (!isDataLoaded) {
     console.log("Data is still loading. Please wait.");
@@ -318,28 +423,27 @@ async function getListInfoFromSelection() {
   try {
     await Word.run(async (context) => {
       const selection = context.document.getSelection();
-      const range = selection.getRange();
-      range.load("text");
+      const paragraphs = selection.paragraphs;
+
+      // Load all required properties for paragraphs
+      paragraphs.load("items");
       await context.sync();
 
-      const selectedRange = range.text;
-      const paragraphs = selection.paragraphs;
-      paragraphs.load("items");
+      // Collect properties for all paragraphs at once
+      const paragraphPromises = paragraphs.items.map((paragraph) => {
+        paragraph.load("text,isListItem");
+        if (paragraph.isListItem) {
+          paragraph.listItem.load("level,listString");
+        }
+        return paragraph;
+      });
+
       await context.sync();
 
       let newSelections = [];
 
-      for (let i = 0; i < paragraphs.items.length; i++) {
-        const selectedParagraph = paragraphs.items[i];
-        selectedParagraph.load("text,isListItem");
-        await context.sync();
-
-        if (selectedParagraph.isListItem) {
-          selectedParagraph.listItem.load("level,listString");
-          await context.sync();
-        }
-
-        const selectedText = selectedParagraph.text.trim().replace(/^\.\s*/, "");
+      for (const paragraph of paragraphs.items) {
+        const selectedText = paragraph.text.trim().replace(/^\.\s*/, "");
         const normalizedSelectedText = normalizeText(selectedText);
 
         const matchingParagraphs = allParagraphsData.filter(
@@ -349,9 +453,9 @@ async function getListInfoFromSelection() {
         if (matchingParagraphs.length > 0) {
           let bestMatch = matchingParagraphs[0];
 
-          if (matchingParagraphs.length > 1 && selectedParagraph.isListItem) {
-            const selectedLevel = selectedParagraph.listItem.level;
-            const selectedListString = selectedParagraph.listItem.listString;
+          if (matchingParagraphs.length > 1 && paragraph.isListItem) {
+            const selectedLevel = paragraph.listItem.level;
+            const selectedListString = paragraph.listItem.listString;
 
             const exactMatch = matchingParagraphs.find(
               (para) => para.isListItem && para.level === selectedLevel && para.listString === selectedListString
@@ -378,6 +482,7 @@ async function getListInfoFromSelection() {
       if (newSelections.length > 0) {
         categoryData[selectedCategory] = [...categoryData[selectedCategory], ...newSelections];
 
+        // Sort keys numerically
         categoryData[selectedCategory].sort((a, b) => {
           const aNumbers = a.key.split(".").map((num) => parseInt(num));
           const bNumbers = b.key.split(".").map((num) => parseInt(num));
@@ -659,3 +764,23 @@ sendDealButton.addEventListener("click", async () => {
     sendDealButton.style.cursor = "pointer";
   }
 });
+
+//Testing code for css
+// const loginButton = document.getElementById("loginButton");
+// const loginModal = document.getElementById("loginModal");
+// const closeModal = document.querySelector(".close-modal");
+
+// loginButton.addEventListener("click", () => {
+//   loginModal.style.display = "block";
+// });
+
+// closeModal.addEventListener("click", () => {
+//   loginModal.style.display = "none";
+// });
+
+// // Close modal when clicking outside
+// window.addEventListener("click", (e) => {
+//   if (e.target === loginModal) {
+//     loginModal.style.display = "none";
+//   }
+// });
